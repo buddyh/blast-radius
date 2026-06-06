@@ -83,7 +83,10 @@ func Analyze(ctx context.Context, o Options) (*Report, error) {
 		return nil, err
 	}
 
-	rep := &Report{Target: o.Target, Lang: srv.Lang, Depth: o.Depth}
+	rep := &Report{
+		Target: o.Target, Lang: srv.Lang, Depth: o.Depth,
+		Breaking: []Consumer{}, Ripple: []Consumer{}, Tests: []Consumer{},
+	}
 
 	var uri string
 	var pos lsp.Position
