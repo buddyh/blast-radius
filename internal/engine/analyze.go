@@ -74,7 +74,8 @@ func Analyze(ctx context.Context, o Options) (*Report, error) {
 		return nil, fmt.Errorf("%s language server not installed — %s", srv.Lang, srv.Install)
 	}
 
-	cl, err := lsp.Start(srv.Cmd)
+	cmd := append([]string{srv.Path()}, srv.Cmd[1:]...) // launch by resolved path (may be off-PATH)
+	cl, err := lsp.Start(cmd)
 	if err != nil {
 		return nil, err
 	}

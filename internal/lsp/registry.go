@@ -3,6 +3,7 @@
 package lsp
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -33,10 +34,37 @@ var Servers = []Server{
 		"brew install llvm   # provides clangd"},
 }
 
-// Path returns the resolved binary path, or "" if the server isn't on PATH.
+// Path returns the resolved binary path. It checks PATH first, then common
+// install locations (~/go/bin, ~/.cargo/bin, …) so servers installed by
+// toolchains that aren't on PATH are still found. Returns "" if not found.
 func (s Server) Path() string {
-	p, _ := exec.LookPath(s.Cmd[0])
-	return p
+	if p, err := exec.LookPath(s.Cmd[0]); err == nil {
+		return p
+	}
+	for _, dir := range fallbackBinDirs() {
+		cand := filepath.Join(dir, s.Cmd[0])
+		if fi, err := os.Stat(cand); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return cand
+		}
+	}
+	return ""
+}
+
+// fallbackBinDirs are common per-toolchain bin directories that are often not
+// on PATH in a non-login shell.
+func fallbackBinDirs() []string {
+	home, _ := os.UserHomeDir()
+	dirs := []string{}
+	if gp := os.Getenv("GOPATH"); gp != "" {
+		dirs = append(dirs, filepath.Join(gp, "bin"))
+	}
+	dirs = append(dirs,
+		filepath.Join(home, "go", "bin"),
+		filepath.Join(home, ".cargo", "bin"),
+		filepath.Join(home, ".local", "bin"),
+		"/opt/homebrew/bin", "/usr/local/bin",
+	)
+	return dirs
 }
 
 // Installed reports whether the server binary is available.
