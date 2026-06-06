@@ -17,10 +17,11 @@ import (
 
 // Options configure an analysis run.
 type Options struct {
-	Target string // symbol name, or file:line[:col]
+	Target string // symbol name, file:line[:col], endpoint, column, or config key
 	Dir    string // workspace root (default: cwd)
 	Depth  int    // transitive caller depth (default 3)
 	Lang   string // optional server name/langID override
+	Kind   string // auto|symbol|endpoint|column|config|text (default auto)
 }
 
 // Consumer is one place affected by changing the target.
@@ -40,6 +41,7 @@ type Report struct {
 	Ripple    []Consumer `json:"ripple"`    // transitive callers (depth >= 2)
 	Tests     []Consumer `json:"tests"`     // references inside test files
 	Ambiguous []string   `json:"ambiguous,omitempty"`
+	Note      string     `json:"note,omitempty"`
 	Depth     int        `json:"depth"`
 }
 
@@ -64,6 +66,16 @@ func Analyze(ctx context.Context, o Options) (*Report, error) {
 	dir, _ = filepath.Abs(dir)
 	if o.Depth <= 0 {
 		o.Depth = 3
+	}
+
+	// Non-symbol targets (endpoints, columns, config keys) live outside the type
+	// system, so the language server can't resolve them — fall back to a text scan.
+	kind := o.Kind
+	if kind == "" || kind == "auto" {
+		kind = detectKind(o.Target)
+	}
+	if kind != "symbol" {
+		return analyzeText(dir, o, kind)
 	}
 
 	srv, defFile, ok := pickServer(dir, o)
@@ -289,4 +301,67 @@ func dominantServer(dir string) (lsp.Server, bool) {
 		}
 	}
 	return best, found
+}
+
+var (
+	endpointRe    = regexp.MustCompile(`(?i)^((GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+)?/\S`)
+	endpointSplit = regexp.MustCompile(`(?i)^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(/\S*)$`)
+	configRe      = regexp.MustCompile(`^[A-Z][A-Z0-9_]{2,}$`)
+)
+
+// detectKind guesses a non-symbol target type; everything else (incl. file:line)
+// is treated as a symbol and resolved via the language server.
+func detectKind(target string) string {
+	switch {
+	case endpointRe.MatchString(target):
+		return "endpoint"
+	case configRe.MatchString(target):
+		return "config"
+	default:
+		return "symbol"
+	}
+}
+
+// analyzeText resolves non-symbol targets with a text scan (no call graph).
+func analyzeText(dir string, o Options, kind string) (*Report, error) {
+	re, exts, label, note := buildTextQuery(kind, o.Target)
+	if re == nil {
+		return nil, fmt.Errorf("could not build a %s query for %q", kind, o.Target)
+	}
+	breaking, tests := textScan(dir, re, exts)
+	if breaking == nil {
+		breaking = []Consumer{}
+	}
+	if tests == nil {
+		tests = []Consumer{}
+	}
+	return &Report{
+		Target: o.Target, Kind: label, Lang: "text",
+		Breaking: breaking, Ripple: []Consumer{}, Tests: tests,
+		Note: note, Depth: 0,
+	}, nil
+}
+
+func buildTextQuery(kind, target string) (re *regexp.Regexp, exts map[string]bool, label, note string) {
+	switch kind {
+	case "endpoint":
+		path := target
+		if m := endpointSplit.FindStringSubmatch(target); m != nil {
+			path = m[2]
+		}
+		return regexp.MustCompile(regexp.QuoteMeta(path)), codeExts, "endpoint",
+			"path-string match — review both route definitions and client calls"
+	case "config":
+		return regexp.MustCompile(`\b` + regexp.QuoteMeta(target) + `\b`), configExts, "config/env key", ""
+	case "column":
+		col := target
+		if i := strings.LastIndex(target, "."); i >= 0 {
+			col = target[i+1:]
+		}
+		return regexp.MustCompile(`\b` + regexp.QuoteMeta(col) + `\b`), dataExts, "db column",
+			"column names are common words — matches can be noisy; narrow if needed"
+	case "text":
+		return regexp.MustCompile(regexp.QuoteMeta(target)), nil, "text", ""
+	}
+	return nil, nil, kind, ""
 }

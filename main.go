@@ -28,6 +28,7 @@ func main() {
 	var (
 		flagDepth   int
 		flagLang    string
+		flagKind    string
 		flagJSON    bool
 		flagTimeout time.Duration
 	)
@@ -39,7 +40,7 @@ func main() {
 			"ripple to, classified breaking / ripple / test, with a risk + migration hint.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			o := engine.Options{Target: args[0], Depth: flagDepth, Lang: flagLang}
+			o := engine.Options{Target: args[0], Depth: flagDepth, Lang: flagLang, Kind: flagKind}
 			if len(args) > 1 {
 				o.Dir = args[1]
 			}
@@ -59,6 +60,7 @@ func main() {
 	}
 	analyzeCmd.Flags().IntVar(&flagDepth, "depth", 3, "transitive caller depth")
 	analyzeCmd.Flags().StringVar(&flagLang, "lang", "", "force a language: go|typescript|python|rust|cpp")
+	analyzeCmd.Flags().StringVar(&flagKind, "kind", "auto", "target kind: auto|symbol|endpoint|column|config|text")
 	analyzeCmd.Flags().BoolVar(&flagJSON, "json", false, "output JSON (for tooling)")
 	analyzeCmd.Flags().DurationVar(&flagTimeout, "timeout", 45*time.Second, "overall timeout")
 

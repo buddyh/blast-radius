@@ -16,9 +16,16 @@ func (r *Report) Render(w io.Writer, format string) {
 	}
 
 	fmt.Fprintf(w, "\nblast radius · %s\n", r.Target)
-	fmt.Fprintf(w, "  def     %s  (%s · %s)\n", r.Def, r.Kind, r.Lang)
+	if r.Def != "" {
+		fmt.Fprintf(w, "  def     %s  (%s · %s)\n", r.Def, r.Kind, r.Lang)
+	} else {
+		fmt.Fprintf(w, "  kind    %s\n", r.Kind)
+	}
 	fmt.Fprintf(w, "  impact  %d breaking · %d ripple · %d test\n",
 		len(r.Breaking), len(r.Ripple), len(r.Tests))
+	if r.Note != "" {
+		fmt.Fprintf(w, "  note    %s\n", r.Note)
+	}
 	if len(r.Ambiguous) > 0 {
 		fmt.Fprintf(w, "  note    %d other symbols share this name — pass file:line to disambiguate\n", len(r.Ambiguous))
 	}
