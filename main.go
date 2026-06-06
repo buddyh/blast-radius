@@ -26,11 +26,13 @@ func main() {
 	}
 
 	var (
-		flagDepth   int
-		flagLang    string
-		flagKind    string
-		flagJSON    bool
-		flagTimeout time.Duration
+		flagDepth    int
+		flagLang     string
+		flagKind     string
+		flagJSON     bool
+		flagTimeout  time.Duration
+		flagCoChange bool
+		flagCoLimit  int
 	)
 	analyzeCmd := &cobra.Command{
 		Use:   "analyze <target> [path]",
@@ -40,7 +42,10 @@ func main() {
 			"ripple to, classified breaking / ripple / test, with a risk + migration hint.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			o := engine.Options{Target: args[0], Depth: flagDepth, Lang: flagLang, Kind: flagKind}
+			o := engine.Options{
+				Target: args[0], Depth: flagDepth, Lang: flagLang, Kind: flagKind,
+				CoChange: flagCoChange, CoChangeLimit: flagCoLimit,
+			}
 			if len(args) > 1 {
 				o.Dir = args[1]
 			}
@@ -63,6 +68,8 @@ func main() {
 	analyzeCmd.Flags().StringVar(&flagKind, "kind", "auto", "target kind: auto|symbol|endpoint|column|config|text")
 	analyzeCmd.Flags().BoolVar(&flagJSON, "json", false, "output JSON (for tooling)")
 	analyzeCmd.Flags().DurationVar(&flagTimeout, "timeout", 45*time.Second, "overall timeout")
+	analyzeCmd.Flags().BoolVar(&flagCoChange, "cochange", true, "include git temporal-coupling (co-change) analysis")
+	analyzeCmd.Flags().IntVar(&flagCoLimit, "cochange-limit", 8, "max co-changed files to show")
 
 	doctorCmd := &cobra.Command{
 		Use:   "doctor",

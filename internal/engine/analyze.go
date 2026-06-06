@@ -22,6 +22,9 @@ type Options struct {
 	Depth  int    // transitive caller depth (default 3)
 	Lang   string // optional server name/langID override
 	Kind   string // auto|symbol|endpoint|column|config|text (default auto)
+
+	CoChange      bool // include git temporal-coupling analysis
+	CoChangeLimit int  // top N co-changed files (default 8)
 }
 
 // Consumer is one place affected by changing the target.
@@ -40,9 +43,10 @@ type Report struct {
 	Breaking  []Consumer `json:"breaking"`  // direct references
 	Ripple    []Consumer `json:"ripple"`    // transitive callers (depth >= 2)
 	Tests     []Consumer `json:"tests"`     // references inside test files
-	Ambiguous []string   `json:"ambiguous,omitempty"`
-	Note      string     `json:"note,omitempty"`
-	Depth     int        `json:"depth"`
+	Ambiguous []string        `json:"ambiguous,omitempty"`
+	CoChange  []CoChangeEntry `json:"cochange,omitempty"`
+	Note      string          `json:"note,omitempty"`
+	Depth     int             `json:"depth"`
 }
 
 var fileLineRe = regexp.MustCompile(`^(.+):(\d+)(?::(\d+))?$`)
@@ -101,11 +105,12 @@ func Analyze(ctx context.Context, o Options) (*Report, error) {
 		Breaking: []Consumer{}, Ripple: []Consumer{}, Tests: []Consumer{},
 	}
 
-	var uri string
+	var uri, defPath string
 	var pos lsp.Position
 	if defFile != nil { // target was file:line[:col]
 		uri = lsp.PathToURI(defFile.path)
 		pos = lsp.Position{Line: defFile.line, Character: defFile.col}
+		defPath = defFile.path
 		_ = cl.DidOpen(defFile.path, srv.LangID)
 		rep.Def = fmt.Sprintf("%s:%d", rel(dir, defFile.path), defFile.line+1)
 		rep.Kind = "symbol"
@@ -121,7 +126,8 @@ func Analyze(ctx context.Context, o Options) (*Report, error) {
 		def := matches[0]
 		uri = def.Location.URI
 		pos = def.Location.Range.Start
-		_ = cl.DidOpen(lsp.URIToPath(uri), srv.LangID)
+		defPath = lsp.URIToPath(uri)
+		_ = cl.DidOpen(defPath, srv.LangID)
 		rep.Def = fmt.Sprintf("%s:%d", rel(dir, lsp.URIToPath(uri)), pos.Line+1)
 		rep.Kind = lsp.SymbolKind[def.Kind]
 		for _, m := range matches[1:] {
@@ -161,6 +167,10 @@ func Analyze(ctx context.Context, o Options) (*Report, error) {
 	sortConsumers(rep.Breaking)
 	sortConsumers(rep.Ripple)
 	sortConsumers(rep.Tests)
+
+	if o.CoChange && defPath != "" {
+		rep.CoChange = CoChange(dir, defPath, o.CoChangeLimit, 300)
+	}
 	return rep, nil
 }
 

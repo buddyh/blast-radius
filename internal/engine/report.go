@@ -34,6 +34,13 @@ func (r *Report) Render(w io.Writer, format string) {
 	section(w, "RIPPLE  (transitive callers — review for behavior change)", r.Ripple)
 	section(w, "TESTS  (re-run these)", r.Tests)
 
+	if len(r.CoChange) > 0 {
+		fmt.Fprintf(w, "\n  CO-CHANGE  (historically edited together — git, not static)\n")
+		for _, e := range r.CoChange {
+			fmt.Fprintf(w, "    %-44s %d commits (%.0f%%)\n", e.File, e.Commits, e.Pct*100)
+		}
+	}
+
 	level, strategy := risk(r)
 	fmt.Fprintf(w, "\n  risk    %s — %s\n\n", level, strategy)
 }
