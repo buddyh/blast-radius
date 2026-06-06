@@ -1,12 +1,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/buddyh/blast-radius/internal/engine"
 	"github.com/buddyh/blast-radius/internal/lsp"
 	"github.com/spf13/cobra"
 )
+
+func isTTY() bool {
+	fi, err := os.Stdout.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
 
 func main() {
 	root := &cobra.Command{
@@ -17,17 +25,42 @@ func main() {
 		SilenceErrors: true,
 	}
 
+	var (
+		flagDepth   int
+		flagLang    string
+		flagJSON    bool
+		flagTimeout time.Duration
+	)
 	analyzeCmd := &cobra.Command{
 		Use:   "analyze <target> [path]",
 		Short: "Map every consumer of a symbol before changing it (breaking + transitive)",
-		Long: "Resolve a target — a function, method, type, or symbol — via the language " +
-			"server, then report every reference and the transitive callers that a change " +
-			"would ripple to, classified breaking / ripple / test, with a suggested change order.",
+		Long: "Resolve a target — a symbol name or file:line[:col] — via the language " +
+			"server, then report every reference and the transitive callers a change would " +
+			"ripple to, classified breaking / ripple / test, with a risk + migration hint.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("the LSP engine lands in the next commit")
+			o := engine.Options{Target: args[0], Depth: flagDepth, Lang: flagLang}
+			if len(args) > 1 {
+				o.Dir = args[1]
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), flagTimeout)
+			defer cancel()
+			rep, err := engine.Analyze(ctx, o)
+			if err != nil {
+				return err
+			}
+			format := "table"
+			if flagJSON || !isTTY() {
+				format = "json"
+			}
+			rep.Render(os.Stdout, format)
+			return nil
 		},
 	}
+	analyzeCmd.Flags().IntVar(&flagDepth, "depth", 3, "transitive caller depth")
+	analyzeCmd.Flags().StringVar(&flagLang, "lang", "", "force a language: go|typescript|python|rust|cpp")
+	analyzeCmd.Flags().BoolVar(&flagJSON, "json", false, "output JSON (for tooling)")
+	analyzeCmd.Flags().DurationVar(&flagTimeout, "timeout", 45*time.Second, "overall timeout")
 
 	doctorCmd := &cobra.Command{
 		Use:   "doctor",

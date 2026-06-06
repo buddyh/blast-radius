@@ -14,21 +14,22 @@ type Server struct {
 	Lang    string   // display name, e.g. "Go"
 	Exts    []string // source extensions it handles, incl. leading dot
 	Cmd     []string // launch command + args (stdio JSON-RPC)
+	LangID  string   // LSP languageId for textDocument/didOpen
 	Install string   // one-line install hint
 }
 
 // Servers is the registry of supported language servers, in priority order.
 var Servers = []Server{
-	{"Go", []string{".go"}, []string{"gopls"},
+	{"Go", []string{".go"}, []string{"gopls"}, "go",
 		"go install golang.org/x/tools/gopls@latest"},
 	{"TypeScript/JavaScript", []string{".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"},
-		[]string{"typescript-language-server", "--stdio"},
+		[]string{"typescript-language-server", "--stdio"}, "typescript",
 		"npm install -g typescript-language-server typescript"},
-	{"Python", []string{".py", ".pyi"}, []string{"pyright-langserver", "--stdio"},
+	{"Python", []string{".py", ".pyi"}, []string{"pyright-langserver", "--stdio"}, "python",
 		"npm install -g pyright"},
-	{"Rust", []string{".rs"}, []string{"rust-analyzer"},
+	{"Rust", []string{".rs"}, []string{"rust-analyzer"}, "rust",
 		"rustup component add rust-analyzer"},
-	{"C/C++", []string{".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hh"}, []string{"clangd"},
+	{"C/C++", []string{".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hh"}, []string{"clangd"}, "cpp",
 		"brew install llvm   # provides clangd"},
 }
 
