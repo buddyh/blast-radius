@@ -58,6 +58,17 @@ Flags: `--depth N` (ripple depth, default 3) · `--kind auto|symbol|endpoint|col
 | Rust | rust-analyzer | `rustup component add rust-analyzer` |
 | C/C++ | clangd | `brew install llvm` |
 
+## Use as a Claude skill
+
+`br` ships with an agent skill in [`skill/`](skill/SKILL.md) so Claude (or any
+skill-aware agent) reaches for it automatically on "what breaks if I change X",
+"what depends on this", or before a refactor. Install it by copying it into your
+skills directory:
+
+```sh
+cp -r skill ~/.claude/skills/blast-radius     # or ~/.agents/skills/blast-radius
+```
+
 ## Limits (honest)
 
 - Only as smart as the language server, one language at a time.
