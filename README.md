@@ -2,29 +2,53 @@
 
 **Map the blast radius of a code change before you make it.**
 
-Point `br` at a function, method, type, or symbol and it resolves it through the
-language server, then reports every reference and the **transitive callers** a
-change would ripple to — classified *breaking / ripple / test* — with a
-suggested change order. Real symbol resolution, not grep-by-name: no
-false-positives from same-named symbols, and it follows the call graph.
+Point `br` at a symbol — or an API endpoint, DB column, or config key — and it
+reports everything a change would touch:
 
-## Why LSP
+- **breaking** — direct references (semantic, not grep-by-name)
+- **ripple** — *transitive* callers, followed through the call graph
+- **tests** — the tests that exercise it
+- **co-change** — files that *historically* change together with it (git), the
+  coupling static analysis can't see
+- a **risk + migration** hint
 
-`br` drives the language servers you already use (gopls, typescript-language-server,
-pyright, rust-analyzer, clangd) for accurate, cross-language find-references and
-**call hierarchy**. The semantic resolution comes from battle-tested engines —
-`br` orchestrates them into an impact report.
+It's accurate because it drives the language servers you already use (gopls,
+typescript-language-server, pyright, rust-analyzer, clangd) for find-references
+and call-hierarchy — then layers on text resolution for non-symbol targets and
+git history for temporal coupling.
 
-## Status
-
-Early. `br doctor` works today; the analysis engine is landing incrementally.
+## Install
 
 ```sh
-br doctor                 # which language servers are available
-br analyze <symbol> [dir] # map a symbol's blast radius   (coming online)
+go install github.com/buddyh/blast-radius/cmd/br@latest
+br doctor          # check which language servers are available
 ```
 
-## Install the language servers you need
+## Use
+
+```sh
+br analyze getUserById                 # a symbol, anywhere in the repo
+br analyze internal/auth.go:42:6       # a symbol at a file:line:col
+br analyze "POST /api/users"           # an API endpoint
+br analyze users.email --kind column   # a database column
+br analyze DATABASE_URL                 # a config / env key (auto-detected)
+br analyze getUserById --json          # machine-readable, for tooling/agents
+```
+
+Flags: `--depth N` (ripple depth, default 3) · `--kind auto|symbol|endpoint|column|config|text`
+· `--lang go|typescript|python|rust|cpp` · `--cochange` / `--cochange-limit` · `--json`.
+
+## How it resolves each target
+
+| Target | How |
+| --- | --- |
+| symbol, `file:line:col` | language server: references + call hierarchy (transitive) |
+| endpoint / column / config key | text scan (these live outside the type system) |
+| any target, in a git repo | + git co-change for temporal coupling |
+
+## Language servers
+
+`br` uses whatever you have installed (it also looks in `~/go/bin`, `~/.cargo/bin`, …):
 
 | Language | Server | Install |
 | --- | --- | --- |
@@ -33,6 +57,14 @@ br analyze <symbol> [dir] # map a symbol's blast radius   (coming online)
 | Python | pyright | `npm i -g pyright` |
 | Rust | rust-analyzer | `rustup component add rust-analyzer` |
 | C/C++ | clangd | `brew install llvm` |
+
+## Limits (honest)
+
+- Only as smart as the language server, one language at a time.
+- Static call hierarchy can't follow reflection, dynamic dispatch, DI containers,
+  or string-built names — `br` flags low-confidence/ambiguous cases.
+- Resolution is **per workspace** — it doesn't (yet) cross repo/service
+  boundaries. Co-change and text targets help cover what symbols can't.
 
 ## License
 
